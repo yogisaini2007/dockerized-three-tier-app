@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Docker Three-Tier Task Manager</title>
+  <style>
+    :root { color-scheme: light; font-family: Inter, system-ui, -apple-system, sans-serif; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; background: #f3f6fb; color: #172033; }
+    main { width: min(720px, calc(100% - 32px)); margin: 56px auto; }
+    .eyebrow { color: #2563eb; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; font-size: .78rem; }
+    h1 { margin: 8px 0; font-size: clamp(2rem, 5vw, 3rem); }
+    .sub { color: #5c667a; line-height: 1.6; }
+    .panel { background: white; border: 1px solid #e3e8f0; border-radius: 18px; padding: 24px; margin-top: 24px; box-shadow: 0 12px 35px #1720330b; }
+    form { display: flex; gap: 10px; }
+    input { min-width: 0; flex: 1; padding: 13px 14px; border: 1px solid #cbd5e1; border-radius: 10px; font: inherit; }
+    button { border: 0; border-radius: 10px; padding: 13px 18px; background: #2563eb; color: white; font: inherit; font-weight: 700; cursor: pointer; }
+    button:disabled { opacity: .6; cursor: wait; }
+    ul { list-style: none; padding: 0; margin: 16px 0 0; }
+    li { padding: 14px 0; border-bottom: 1px solid #edf0f5; overflow-wrap: anywhere; }
+    li:last-child { border-bottom: 0; }
+    .status { font-size: .9rem; color: #64748b; min-height: 1.4em; margin-top: 14px; }
+    .pill { display: inline-block; padding: 5px 9px; border-radius: 999px; background: #e8f7ee; color: #187044; font-size: .8rem; font-weight: 700; }
+    footer { color: #64748b; font-size: .85rem; margin: 20px 4px; }
+    @media (max-width: 520px) { form { flex-direction: column; } }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="eyebrow">DevOps learning project</div>
+    <h1>Task Manager</h1>
+    <p class="sub">A three-tier application running with Docker Compose: Nginx frontend, Flask API and MySQL database.</p>
+    <span class="pill" id="health">Checking API…</span>
+    <section class="panel">
+      <h2>Add a task</h2>
+      <form id="task-form">
+        <input id="task-title" maxlength="255" placeholder="e.g. Learn Docker volumes" required>
+        <button id="submit" type="submit">Add task</button>
+      </form>
+      <p class="status" id="status" role="status"></p>
+      <h2>Saved tasks</h2>
+      <ul id="tasks"><li>Loading tasks…</li></ul>
+    </section>
+    <footer>Practice goals: container networking, health checks, persistent volumes and troubleshooting.</footer>
+  </main>
+  <script>
+    const taskList = document.querySelector("#tasks");
+    const statusBox = document.querySelector("#status");
+    const healthBadge = document.querySelector("#health");
+    const form = document.querySelector("#task-form");
+    const input = document.querySelector("#task-title");
+    const submitButton = document.querySelector("#submit");
+
+    async function loadTasks() {
+      try {
+        const response = await fetch("/api/tasks");
+        if (!response.ok) throw new Error("API returned " + response.status);
+        const tasks = await response.json();
+        taskList.replaceChildren();
+        if (!tasks.length) {
+          const empty = document.createElement("li");
+          empty.textContent = "No tasks yet. Add your first task above.";
+          taskList.appendChild(empty);
+        }
+        tasks.forEach(task => {
+          const item = document.createElement("li");
+          item.textContent = task.title;
+          taskList.appendChild(item);
+        });
+        healthBadge.textContent = "API connected";
+      } catch (error) {
+        taskList.replaceChildren();
+        const item = document.createElement("li");
+        item.textContent = "Could not load tasks. Check Docker logs.";
+        taskList.appendChild(item);
+        healthBadge.textContent = "API unavailable";
+        statusBox.textContent = error.message;
+      }
+    }
+
+    form.addEventListener("submit", async event => {
+      event.preventDefault();
+      const title = input.value.trim();
+      if (!title) return;
+      submitButton.disabled = true;
+      statusBox.textContent = "Saving task…";
+      try {
+        const response = await fetch("/api/tasks", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ title })
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || "Request failed");
+        input.value = "";
+        statusBox.textContent = "Task saved to MySQL.";
+        await loadTasks();
+      } catch (error) {
+        statusBox.textContent = "Error: " + error.message;
+      } finally {
+        submitButton.disabled = false;
+        input.focus();
+      }
+    });
+
+    fetch("/api/health")
+      .then(response => response.json())
+      .then(data => { healthBadge.textContent = data.database === "connected" ? "API + database connected" : "Database unavailable"; })
+      .catch(() => { healthBadge.textContent = "API unavailable"; });
+    loadTasks();
+  </script>
+</body>
+</html>
