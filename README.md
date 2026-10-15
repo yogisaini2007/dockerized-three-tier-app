@@ -110,3 +110,4 @@ docker compose down -v
 - The credentials in `.env.example` are for local practice only. Do not use them for an internet-facing deployment.
 - The database is not published to the host; it is reachable only by services on the Compose network.
 - For production, use managed secrets, strong credentials, TLS, restricted network access, dependency updates and backups.
+Learning Git branching and DevOps CI/CD.
